@@ -1,6 +1,8 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Core.Entities;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace API.Controllers
 {
@@ -26,7 +28,8 @@ namespace API.Controllers
             }
             else if (extension == ".json")
             {
-                return Ok("json");
+                var result = await ProcessJsonFile(file);
+                return result;
             }
             else
             {
@@ -96,6 +99,30 @@ namespace API.Controllers
                     AverageQuantitySold = averageQuantity,
                     AveragePricePerUnit = averagePricePerUnit
                 });
+            }
+        }
+
+        private async Task<ActionResult> ProcessJsonFile(IFormFile file)
+        {
+            using (var stream = new StreamReader(file.OpenReadStream()))
+            {
+                var jsonString = await stream.ReadToEndAsync();
+
+                var products = JsonSerializer.Deserialize<List<Product>>(jsonString);
+
+                if (products == null || !products.Any())
+                {
+                    return BadRequest(new ProblemDetails { Title = "Invalid or empty JSON file" });
+                }
+
+                var filteredProducts = products.Where(p => p.PricePerUnit > 100).ToList();
+
+                return Ok(new
+                {
+                    Message = "Json file processed successfully",
+                    FilteredProducts = filteredProducts,
+                });
+
             }
         }
     }
