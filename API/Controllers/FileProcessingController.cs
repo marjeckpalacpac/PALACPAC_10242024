@@ -21,7 +21,8 @@ namespace API.Controllers
 
             if (extension == ".csv")
             {
-                return Ok("csv");
+                var result = await ProcessCsvFile(file);
+                return result;
             }
             else if (extension == ".json")
             {
@@ -32,6 +33,70 @@ namespace API.Controllers
                 return BadRequest(new ProblemDetails { Title = "Unsupported file format" });
             }
 
+        }
+
+        private async Task<ActionResult> ProcessCsvFile(IFormFile file)
+        {
+            using (var stream = new StreamReader(file.OpenReadStream()))
+            {
+                var csvLines = new List<string>();
+                string? line;
+
+                while ((line = await stream.ReadLineAsync()) != null)
+                {
+                    csvLines.Add(line);
+                }
+
+                if (!csvLines.Any())
+                {
+                    return BadRequest(new ProblemDetails { Title = "Empty or invalid CSV file" });
+                }
+
+                var headerLine = csvLines[0];
+                var headers = headerLine.Split(',');
+
+                var expectedColumns = new List<string> { "Product", "QuantitySold", "PricePerUnit", "TotalPrice" };
+                var missingColumns = expectedColumns.Except(headers).ToList();
+                if (missingColumns.Any())
+                {
+                    return BadRequest(new ProblemDetails { Title = $"Missing columns: {string.Join(", ", missingColumns)}" });
+                }
+
+                var totalQuantity = 0.0;
+                var totalPriceSum = 0.0;
+                var totalCount = 0;
+
+                foreach (var csvRow in csvLines.Skip(1))
+                {
+                    var values = csvRow.Split(',');
+
+                    if (double.TryParse(values[Array.IndexOf(headers, "QuantitySold")], out double quantity))
+                    {
+                        totalQuantity += quantity;
+                    }
+
+                    if (double.TryParse(values[Array.IndexOf(headers, "PricePerUnit")], out double pricePerUnit))
+                    {
+                        totalPriceSum += pricePerUnit;
+                    }
+
+                    totalCount++;
+                }
+
+                if (totalCount == 0)
+                {
+                    return BadRequest(new ProblemDetails { Title = "No valid data to calculate averages." });
+                }
+
+                var averageQuantity = (double)totalQuantity / totalCount;
+                var averagePricePerUnit = totalPriceSum / totalCount;
+                return Ok(new
+                {
+                    Message = "CSV file processed successfully",
+                    AverageQuantitySold = averageQuantity,
+                    AveragePricePerUnit = averagePricePerUnit
+                });
+            }
         }
     }
 }
