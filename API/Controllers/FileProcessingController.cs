@@ -10,6 +10,16 @@ namespace API.Controllers
     [ApiController]
     public class FileProcessingController : ControllerBase
     {
+        private static int _fileCounter = 0;
+        private List<string> logMessages = new List<string>();
+        private void LogFileProcessing(string fileName, TimeSpan processingTime)
+        {
+            _fileCounter++;
+            var createdDateTime = DateTime.Now;
+            var logMessage = $"File: #{_fileCounter}: {fileName} processed in {processingTime.TotalMilliseconds} ms at {createdDateTime}";
+            logMessages.Add(logMessage);
+        }
+
         [HttpPost]
         public async Task<ActionResult> Upload([FromForm] IFormFile? file)
         {
@@ -21,18 +31,26 @@ namespace API.Controllers
 
             var extension = Path.GetExtension(file.FileName).ToLower();
 
+            var stopwatch = Stopwatch.StartNew();
+
             if (extension == ".csv")
             {
                 var result = await ProcessCsvFile(file);
+                stopwatch.Stop();
+                LogFileProcessing(file.FileName, stopwatch.Elapsed);
                 return result;
             }
             else if (extension == ".json")
             {
                 var result = await ProcessJsonFile(file);
+                stopwatch.Stop();
+                LogFileProcessing(file.FileName, stopwatch.Elapsed);
                 return result;
             }
             else
             {
+                stopwatch.Stop();
+                LogFileProcessing(file.FileName, stopwatch.Elapsed);
                 return BadRequest(new ProblemDetails { Title = "Unsupported file format" });
             }
 
@@ -97,7 +115,8 @@ namespace API.Controllers
                 {
                     Message = "CSV file processed successfully",
                     AverageQuantitySold = averageQuantity,
-                    AveragePricePerUnit = averagePricePerUnit
+                    AveragePricePerUnit = averagePricePerUnit,
+                    Logs = logMessages
                 });
             }
         }
@@ -121,6 +140,7 @@ namespace API.Controllers
                 {
                     Message = "Json file processed successfully",
                     FilteredProducts = filteredProducts,
+                    Logs = logMessages
                 });
 
             }
